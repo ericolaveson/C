@@ -1,5 +1,5 @@
 all:
-	gcc -g dictionary.c main.c -o dict
+	gcc -g -w Dictionary.c main.c -o dict
 	
 clean:
 	rm dict
