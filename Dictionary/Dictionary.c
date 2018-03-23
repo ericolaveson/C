@@ -1,11 +1,9 @@
 /*
- * Dictionary.c
+ * dictionary.c
  *
  *  Created on: Feb 17, 2018
  *      Author: x-wing
  */
-#include <stdio.h>
-#include <string.h>
 #include "Dictionary.h"
 
 
@@ -26,9 +24,25 @@ Node* new_Node(char key)
 /**
  * FUNCTION
  *
+ * Create a new dictionary indexed by array keys.
+ */
+Dictionary array_dict(ulong len)
+{
+	Dictionary dict;
+	dict.head = NULL;
+	dict.tail = NULL;
+	dict.key_len = len;
+	dict.key_type = ARRAY_KEY;
+	return dict;
+}
+
+
+/**
+ * FUNCTION
+ *
  * Traverses the dictionary, paving a path of key bytes along the way.
  */
-void* insert_key(Dictionary *dict, char *key, ulong key_size, ulong data_size)
+void* insert_datum_key(Dictionary *dict, char *key, ulong key_size, ulong data_size)
 {
 	if (key == NULL)
 		return NULL;
@@ -71,9 +85,66 @@ void* insert_key(Dictionary *dict, char *key, ulong key_size, ulong data_size)
 /**
  * FUNCTION
  *
+ * Insert data into a dictionary by array key.
+ */
+void* insert_array_key(Dictionary *dict, char *key, ulong key_size, ulong data_size)
+{
+	ulong len = dict->key_len * key_size;
+	return insert_datum_key(dict, key, len, data_size);
+}
+
+
+/**
+ * FUNCTION
+ *
+ * Insert data into a dictionary by null terminating string key.
+ */
+void* insert_string_key(Dictionary *dict, char *key, ulong data_size)
+{
+	if (key == NULL || !key[0])
+		return NULL;
+
+	int i = 0;
+	if (dict->head == NULL)
+		dict->head = new_Node(key[0]);
+
+	Node *node = dict->head;
+
+	while(key[i])
+	{
+		if (key[i] < node->key)
+		{
+			if (node->left == NULL)
+				node->left = new_Node(key[i]);
+			node = node->left;
+		}
+		else if (key[i] > node->key)
+		{
+			if (node->right == NULL)
+				node->right = new_Node(key[i]);
+			node = node->right;
+		}
+		else if (key[++i])
+		{
+			if (node->down == NULL)
+				node->down = new_Node(key[i]);
+			node = node->down;
+		}
+	}
+
+	if (node->data != NULL)
+		free(node->data);
+	node->data = (void*) malloc(data_size);
+	return node->data;
+}
+
+
+/**
+ * FUNCTION
+ *
  * Traverses the dictionary for data paired with the corresponding key.
  */
-uchar lookup_key(Dictionary *dict, char *key, ulong key_size)
+uchar lookup_datum_key(Dictionary *dict, char *key, ulong key_size)
 {
 	if  (key == NULL)
 	{
@@ -98,6 +169,56 @@ uchar lookup_key(Dictionary *dict, char *key, ulong key_size)
 	}
 
 	if (node && node->key == key[i])
+	{
+		dict->tail = node;
+		return 1;
+	}
+	else
+	{
+		dict->tail = NULL;
+		return 0;
+	}
+}
+
+
+/**
+ * FUNCTION
+ *
+ * Index into a dictionary by array key.
+ */
+uchar lookup_array_key(Dictionary *dict, char *key, ulong key_size)
+{
+	ulong len = dict->key_len * key_size;
+	return lookup_datum_key(dict, key, len);
+}
+
+
+/**
+ * FUNCTION
+ *
+ * Index into a dictionary by string key.
+ */
+uchar lookup_string_key(Dictionary *dict, char *key)
+{
+	dict->tail = NULL;
+
+	if  (key == NULL || !key[0])
+		return 0;
+
+	Node *node = dict->head;
+	int i = 0;
+
+	while (node && key[i])
+	{
+		if (key[i] < node->key)
+			node = node->left;
+		else if  (key[i] > node->key)
+			node = node->right;
+		else if (key[++i])
+			node = node->down;
+	}
+
+	if (node && node->key == key[i-1] && node->data)
 	{
 		dict->tail = node;
 		return 1;
