@@ -8,15 +8,8 @@
 #ifndef DICTIONARY_H_
 #define DICTIONARY_H_
 
-
 #include <ostream>
 #include "Util.h"
-
-
-//#define NodeType Data
-//#define DictType Key comma Data
-//#define NodeTemplate template<class Data>
-//#define DictTemplate template<class Key, class Data>
 
 
 /************************************************************
@@ -49,6 +42,7 @@ public:
 	Node<Data>* branch_right(char, Data);
 	Node<Data>* branch_down (char, Data);
 };
+
 
 /**
  * Print Node
@@ -86,9 +80,6 @@ Node<Data>* Node<Data>::branch_down(char key, Data empty_data)
 		down_node = new Node<Data>(key, empty_data);
 	return down_node;
 }
-
-
-
 
 
 /************************************************************
@@ -132,7 +123,6 @@ private:
 	Data tmp_empty_data;   // TEMP    : reference is returned for empty keys
 	Node<Data> *head;      // HEAD    : top of Dictionary tri-node tree
 
-//	bool  key_is_bad(Key key);
 	Data& NILL() {return tmp_empty_data = empty_data;}
 
 public:
@@ -140,6 +130,7 @@ public:
 	Dictionary(Data d) : head(NULL), empty_data(d) {}
 	~Dictionary();
 	void destroy_dictionary_tree(Node<Data>*);
+	bool is_array(Key key);
 	Data& operator[] (Key key);
 };
 
@@ -184,20 +175,14 @@ Dictionary<Key,Data> :: ~Dictionary()
 
 
 /**
- * Check that the key has a positive length and is
- * not NULL.
+ * Check if the type of the parameter is an array. This
+ * will fail for pointer types, ie. only type[] values will pass.
  */
-//template<class Key, class Data>
-//bool Dictionary<Key,Data> :: key_is_bad(Key key)
-//{
-//	try
-//	{ throw key; }
-//	catch (void *e)
-//	{ if (e == NULL) {return true;} }
-//	catch (...)
-//	{ if (length<Key>(key) <= 0) {return true;} }
-//	return false;
-//}
+template<class Key, class Data>
+bool Dictionary<Key,Data> :: is_array(Key key)
+{
+	return std::is_array<Key>::value;
+}
 
 
 /**
@@ -218,8 +203,17 @@ Data& Dictionary<Key,Data> :: operator [] (Key key)
 	{
 		if (pointer_key == NULL)
 			return NILL();
-		key_len = sizeof(Key);
-		sub_key = (char*)pointer_key;
+
+		if (is_array(key))
+		{
+			key_len = sizeof(Key);
+			sub_key = (char*)pointer_key;
+		}
+		else
+		{
+			key_len = sizeof(void*);
+			sub_key = (char*)&pointer_key;
+		}
 	}
 	catch(std::string &e)
 	{
