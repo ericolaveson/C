@@ -1,423 +1,265 @@
 /*
- * main.cpp
+ * Dictionary.h
  *
  *  Created on: Apr 7, 2018
  *      Author: x-wing
  */
 
-#include "Dictionary.h"
+#ifndef DICTIONARY_H_
+#define DICTIONARY_H_
 
-#include <iostream>
-#include <typeinfo>
-#include <type_traits>
-#include <cstring>
-#include <stdio.h>
+#include <ostream>
 
-using namespace std;
 
-static const int  BOUND = 1000;
-static const char DEFAULT_CHAR = 0xff;
-static const int  DEFAULT_INT  = 0;
+/************************************************************
+ * CLASS : Node
+ * ----------------------------------------------------------
+ * The structure of the Dictionary "key path" Node is
+ * defined below. While performing a lookup with a given
+ * key, the data linked to that key may be found in the very
+ * last Node matched if the key has been inserted previously.
+ * ----------------------------------------------------------
+ * NODE:         _____[NODE_KEY : DATA]_____
+ *              /             |             \
+ *       ______/      ______[DOWN]_____      \______
+ *  _____[LEFT]_____  KEY_i == NODE_KEY   ____[RIGHT]_____
+ *  KEY_i < NODE_KEY                      KEY_i > NODE_KEY
+ ***********************************************************/
+template<class Data> class Node;
+template<class Data> std::ostream& operator << (std::ostream&, const Node<Data>&);
 
-static double* DEFAULT_DOUBLE_POINTER = NULL;
-static ulong*  DEFAULT_ULONG_POINTER = NULL;
-static int     assertions_passed = 0;
-
-typedef unsigned char uchar;
-
-void assert(uchar expression)
+template<class Data> class Node
 {
-	if (!expression)
+public:
+	Data  data;
+	char  key;
+	Node *left_node,*right_node,*down_node;
+
+	friend std::ostream& operator << <>(std::ostream&, const Node<Data>&);
+	Node(char k, Data d):data(d),key(k),left_node(0),right_node(0),down_node(0) {}
+	Node<Data>* branch_left (char, Data);
+	Node<Data>* branch_right(char, Data);
+	Node<Data>* branch_down (char, Data);
+};
+
+
+/**
+ * Print Node
+ */
+template<class Data>
+std::ostream& operator << (std::ostream &out, const Node<Data> &node)
+{
+	out << node.data;
+	return out;
+}
+
+
+template<class Data>
+Node<Data>* Node<Data>::branch_left(char key, Data empty_data)
+{
+	if (left_node == NULL)
+		left_node = new Node<Data>(key, empty_data);
+	return left_node;
+}
+
+
+template<class Data>
+Node<Data>* Node<Data>::branch_right(char key, Data empty_data)
+{
+	if (right_node == NULL)
+		right_node = new Node<Data>(key, empty_data);
+	return right_node;
+}
+
+
+template<class Data>
+Node<Data>* Node<Data>::branch_down(char key, Data empty_data)
+{
+	if (down_node == NULL)
+		down_node = new Node<Data>(key, empty_data);
+	return down_node;
+}
+
+
+/************************************************************
+ * CLASS : Dictionary
+ * ----------------------------------------------------------
+ * This Dictionary structure uses a tri-node design to
+ * insert keys. Upon insertion & lookup of a key, the amount
+ * of nodes visited to recover a datum will be at least the
+ * byte-length of the key.
+ * ----------------------------------------------------------
+ * After inserting a handful of keys in the given order, the
+ * Dictionary will have the following structure:
+ *
+ * KEYS:["DIFFUSE","DIFFIE","DIALECT","ROOT","ROBOT","ZEBRA"]
+ *
+ * HEAD->     [D]_______
+ *             |        \
+ *            [I]       [R]__
+ *             |         |   \
+ *     _______[F]     __[O]  [Z]
+ *    /        |     /   |    |
+ *  [A]       [F]  [B]  [O]  [E]
+ *   |         |    |    |    |
+ *  [L]     __[U]  [O]  [T]  [B]
+ *   |     /   |    |    *    |
+ *  [E]  [I]  [S]  [T]       [R]
+ *   |    |    |    *         |
+ *  [C]  [E]  [E]            [A]
+ *   |    *    *              *
+ *  [T]
+ *   *
+ ***********************************************************/
+template<class Key, class Data> class Dictionary;
+template<class Key, class Data> std::ostream& operator << (std::ostream &, const Dictionary<Key,Data> &);
+
+template<class Key, class Data>
+class Dictionary
+{
+private:
+	const Data empty_data; // DEFAULT : default datum specified by user
+	Data tmp_empty_data;   // TEMP    : reference is returned for empty keys
+	Node<Data> *head;      // HEAD    : top of Dictionary tri-node tree
+
+	Data& NILL() {return tmp_empty_data = empty_data;}
+
+public:
+	friend std::ostream& operator << <>(std::ostream&, const Dictionary<Key,Data>&);
+	Dictionary(Data d) : head(NULL), empty_data(d) {}
+	~Dictionary();
+	void destroy_dictionary_tree(Node<Data>*);
+	bool is_array(Key key);
+	Data& operator[] (Key key);
+};
+
+
+/**
+ * FRIEND: Print Dictionary Contents
+ */
+template<class Key, class Data>
+std::ostream& operator << (std::ostream &out, const Dictionary<Key,Data> &dict)
+{
+	out << "templates are great\n";
+	return out;
+}
+
+
+/**
+ * Recursively de-allocate all memory for the tri-node Dictionary
+ * starting with its top node.
+ */
+template<class Key, class Data>
+void Dictionary<Key,Data> :: destroy_dictionary_tree(Node<Data> *node)
+{
+	if (node)
 	{
-		std::cout << "<~~ ASSERT FAILED -- Test # " << assertions_passed;
-		exit(1);
+		destroy_dictionary_tree(node->left_node);
+		destroy_dictionary_tree(node->right_node);
+		destroy_dictionary_tree(node->down_node);
+		delete(node);
 	}
-	++assertions_passed;
 }
 
 
-void test_strictly_increasing_keys()
+/**
+ * DESTRUCTOR : Call recursive helper function to free the memory of
+ * 				all nodes attached to the head.
+ */
+template<class Key, class Data>
+Dictionary<Key,Data> :: ~Dictionary()
 {
-	Dictionary<int,int> dict(DEFAULT_INT);
-	int keys[BOUND];
-	int data[BOUND];
-	int i;
-
-	for (i = 0; i < BOUND; ++i)
-		keys[i] = data[i] = i;
-
-	for (i = 0; i < BOUND; ++i)
-		dict[keys[i]] = data[i];
-
-	for (i = 0; i < BOUND; ++i)
-		assert(dict[keys[i]] == data[i]);
-
-	printf("PASSED: test_strictly_increasing_keys\n");
+	if (head) { destroy_dictionary_tree(head);}
 }
 
 
-void test_strictly_decreasing_keys()
+/**
+ * Check if the type of the parameter is an array. This
+ * will fail for pointer types, ie. only type[] values will pass.
+ */
+template<class Key, class Data>
+bool Dictionary<Key,Data> :: is_array(Key key)
 {
-	Dictionary<int,int> dict(DEFAULT_INT);
-	int keys[BOUND];
-	int data[BOUND];
-	int i;
-
-	for (i = 0; i < BOUND; ++i)
-		keys[i] = data[i] = BOUND - i - 1;
-
-	for (i = 0; i < BOUND; ++i)
-		dict[keys[i]] = data[i];
-
-
-	for (i = 0; i < BOUND; ++i)
-		assert(dict[keys[i]] == data[i]);
-
-	printf("PASSED: test_strictly_decreasing_keys\n");
+	return std::is_array<Key>::value;
 }
 
 
-void test_unique_random_keys()
+/**
+ * Lookup a key and return the data linked to it.
+ */
+template<class Key, class Data>
+Data& Dictionary<Key,Data> :: operator [] (Key key)
 {
-	Dictionary<int,int> dict(DEFAULT_INT);
-	int knuth[BOUND];
-	int keys[BOUND];
-	int data[BOUND];
-	int i;
+	int key_len;
+	const char *keys;
 
-	for (i = 0; i < BOUND; ++i)
+	std::string str_key = "";
+	char *sub_key = NULL;
+
+	try
+	{ throw key; }
+	catch(void *pointer_key)
 	{
-		keys[i] = data[i] = i;
-		knuth[i] = rand() % BOUND;
-	}
+		if (pointer_key == NULL)
+			return NILL();
 
-	for (i = 0; i < BOUND; ++i)
+		if (is_array(key))
+		{
+			key_len = sizeof(Key);
+			sub_key = (char*)pointer_key;
+		}
+		else
+		{
+			key_len = sizeof(void*);
+			sub_key = (char*)&pointer_key;
+		}
+	}
+	catch(std::string &e)
 	{
-		int temp = keys[i];
-		keys[i] = keys[knuth[i]];
-		keys[knuth[i]] = temp;
-
-		temp = data[i];
-		data[i] = data[knuth[i]];
-		data[knuth[i]] = temp;
+		str_key = e;
+		key_len = e.length();
+		if (key_len <= 0)
+			return NILL();
+	}
+	catch(...)
+	{
+		key_len = sizeof(Key);
+		sub_key = (char*)&key;
 	}
 
-	for (i = 0; i < BOUND; ++i)
-		dict[keys[i]] = data[i];
+	const char *key_s = (sub_key == NULL) ? str_key.c_str() : (const char*)sub_key;
 
-	for (i = 0; i < BOUND; ++i)
-		assert(dict[keys[i]] == data[i]);
+	/* Begin searching at the top-most node */
+	if (head == NULL)
+		head = new Node<Data>(key_s[0], empty_data);
+	Node<Data> *node = head;
 
-	printf("PASSED: test_unique_random_keys\n");
+	int i = 0;
+	while(i < key_len - 1)
+	{
+		if (key_s[i] == node->key)
+		{
+			++i;
+			if (node->down_node == NULL)
+				node->down_node = new Node<Data>(key_s[i], empty_data);
+			node = node->down_node;
+		}
+		else if (key_s[i] < node->key)
+		{
+			if (node->left_node == NULL)
+				node->left_node = new Node<Data>(key_s[i], empty_data);
+			node = node->left_node;
+		}
+		else
+		{
+			if (node->right_node == NULL)
+				node->right_node = new Node<Data>(key_s[i], empty_data);
+			node = node->right_node;
+		}
+	}
+
+	return node->data;
 }
 
 
-void test_random_keys()
-{
-	Dictionary<int,int> dict(DEFAULT_INT);
-	int keys[BOUND];
-	int data[BOUND];
-	int i;
-
-	for (i = 0; i < BOUND; ++i)
-		keys[i] = data[i] = rand() % BOUND;
-
-	for (i = 0; i < BOUND; ++i)
-		dict[keys[i]] = data[i];
-
-	for (i = 0; i < BOUND; ++i)
-		assert(dict[keys[i]] == data[i]);
-
-	printf("PASSED: test_random_keys\n");
-}
-
-
-void test_double_key()
-{
-	Dictionary<double,int> dict(DEFAULT_INT);
-	double key1  = 5.55555678;
-	double key2  = 10.11111144;
-	int    data1 = 11;
-	int    data2 = 22;
-
-	dict[key1] = data1;
-	dict[key2] = data2;
-
-	assert(dict[key2] == data2);
-
-	printf("PASSED: test_double_key\n");
-}
-
-
-void test_double_data()
-{
-	Dictionary<int,double> dict(DEFAULT_INT);
-	int    key1  = 11;
-	int    key2  = 22;
-	double data1 = 5.55555678;
-	double data2 = 10.11111144;
-
-	dict[key1] = data1;
-	dict[key2] = data2;
-
-	assert(dict[key2] == data2);
-
-	printf("PASSED: test_double_data\n");
-}
-
-
-void test_primitive_data()
-{
-	Dictionary<int,double> dict(DEFAULT_INT);
-	int    key1  = 11;
-	int    key2  = 22;
-	double data1 = 5.55555678;
-	double data2 = 10.11111144;
-	double data1_initial = data1;
-
-	dict[key1] = data1;
-	dict[key2] = data2;
-
-	data1 = 7.77777777;
-
-	assert(dict[key1] != data1);
-	assert(dict[key1] == data1_initial);
-
-	printf("PASSED: test_primitive_data\n");
-}
-
-
-void test_pointer_data()
-{
-	Dictionary<int,double*> dict(DEFAULT_DOUBLE_POINTER);
-	int     key1  = 11;
-	int     key2  = 22;
-	double  d1    = 5.55555678;
-	double  d2    = 10.11111144;
-	double *data1 = &d1;
-	double *data2 = &d2;
-
-	dict[key1] = data1;
-	dict[key2] = data2;
-
-	*data1 = 7.77777777;
-	assert(dict[key1] == data1);
-
-	printf("PASSED: test_pointer_data\n");
-}
-
-
-void test_overwrite_data()
-{
-	Dictionary<int,ulong*> dict(DEFAULT_ULONG_POINTER);
-	int    key   = 11;
-	ulong  d1    = 60;
-	ulong  d2    = 99;
-	ulong *data1 = &d1;
-	ulong *data2 = &d2;
-	ulong *found;
-
-	dict[key] = data1;
-	dict[key] = data2;
-
-	assert(dict[key] == data2);
-	assert(*(dict[key]) == *data2);
-
-	printf("PASSED: test_overwrite_data\n");
-}
-
-
-void test_pointer_keys()
-{
-	Dictionary<int*,int> dict(DEFAULT_INT);
-	int  k1    = 77;
-	int  k2    = 88;
-	int *key1  = &k1;
-	int *key2  = &k2;
-	int  data1 = 10;
-	int  data2 = 20;
-
-	dict[key1] = data1;
-	dict[key2] = data2;
-
-	assert(dict[key2] == data2);
-
-	key2 = key1;
-	assert(dict[key2] == data1);
-
-	printf("PASSED: test_pointer_keys\n");
-}
-
-
-void test_pointer_key_overwrite()
-{
-	Dictionary<int*,int> turbo(DEFAULT_INT);
-
-	int  same_key = 11;
-	int  different_key;
-
-	int *key1 = &same_key;
-	int *key2 = &same_key;
-	int *key3 = &same_key;
-	int data1 = 1;
-	int data2 = 2;
-	int data3 = 3;
-
-	turbo[key1] = data1;
-
-	assert(turbo[key1] == data1);
-
-	same_key = 22;
-
-	assert(turbo[key2] == data1);
-
-	same_key = 33;
-
-	assert(turbo[key3] == data1);
-
-	key1 = &different_key;
-
-	assert(turbo[key1] == DEFAULT_INT);
-	assert(turbo[key2] == data1);
-	assert(turbo[key3] == data1);
-
-	turbo[key1] = data2;
-
-	assert(turbo[key1] == data2);
-	assert(turbo[key2] == data1);
-	assert(turbo[key3] == data1);
-
-	key3 = key1;
-
-	assert(turbo[key1] == data2);
-	assert(turbo[key2] == data1);
-	assert(turbo[key3] == data2);
-
-	printf("PASSED: test_pointer_key_overwrite\n");
-}
-
-
-void test_array_key()
-{
-	const int KEY_LEN = 7;
-	Dictionary<int[KEY_LEN],char> dict(DEFAULT_CHAR);
-
-	int  i;
-	char data = 'z';
-	int  key1[] = {0,2,2,7,4,5,5};
-	int *key2   = (int*) malloc(sizeof(int)*KEY_LEN);
-
-	for (i = 0; i < KEY_LEN; ++i)
-		key2[i] = key1[i];
-
-	dict[key1] = data;
-
-	assert(dict[key2] == data);
-
-	/* change last index to test off by one */
-	int test_key1[] = {0,2,2,7,3,5,5};
-	assert(dict[test_key1] == DEFAULT_CHAR);
-
-	int test_key2[] = {0,2,2,7,4,5,6};
-	assert(dict[test_key2] == DEFAULT_CHAR);
-
-	key2[KEY_LEN-1] = 6;
-	dict[key2] = data;
-	assert(dict[key2] == data);
-
-	assert(dict[test_key1] == DEFAULT_CHAR);
-	assert(dict[test_key2] != DEFAULT_CHAR);
-
-	free(key2);
-	printf("PASSED: test_array_key\n");
-}
-
-
-void test_multiple_inserts()
-{
-	const int INSERT_BOUND = 10;
-	Dictionary<int,char> dict(DEFAULT_CHAR);
-
-	int  i;
-	int  key  = 99;
-	char data1 = 'Z';
-	char data2 = 'Y';
-	char test  = 'F';
-
-	dict[key] = data1;
-	assert(dict[key] != DEFAULT_CHAR);
-	assert(dict[key] == data1);
-
-	dict[key] = data1;
-	assert(dict[key] != DEFAULT_CHAR);
-	assert(dict[key] == data1);
-
-
-	for (i = 0; i < INSERT_BOUND; ++i)
-		dict[key] = data1;
-
-	assert(dict[key] != DEFAULT_CHAR);
-	assert(dict[key] == data1);
-
-	dict[key] = data2;
-
-	assert(dict[key] != DEFAULT_CHAR);
-	assert(dict[key] != data1);
-	assert(dict[key] == data2);
-
-	printf("PASSED: test_multiple_inserts\n");
-}
-
-
-void test_string_key()
-{
-	const uchar default_uchar = 0xff;
-
-	Dictionary<string,uchar> dict(default_uchar);
-	uchar data1 = 0x77;
-	uchar data2 = 0x16;
-	uchar test  = 0;
-
-	dict["key1"] = data1;
-	assert(dict["key1"] != default_uchar);
-	assert(dict["key1"] == data1);
-
-	dict["key2"] = data2;
-	assert(dict["key2"] != default_uchar);
-	assert(dict["key2"] == data2);
-
-	assert(dict["key12"] == default_uchar);
-	assert(dict["key22"] == default_uchar);
-	assert(dict["key"] == default_uchar);
-	assert(dict["ke"] == default_uchar);
-	assert(dict["k"] == default_uchar);
-	assert(dict[""] == default_uchar);
-
-	printf("PASSED: test_string_key\n");
-}
-
-
-int main()
-{
-	cout << "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~\n\n";
-
-	test_strictly_increasing_keys();
-	test_strictly_decreasing_keys();
-	test_unique_random_keys();
-	test_random_keys();
-	test_double_key();
-	test_double_data();
-	test_primitive_data();
-	test_pointer_data();
-	test_overwrite_data();
-	test_pointer_keys();
-	test_pointer_key_overwrite();
-	test_array_key();
-	test_multiple_inserts();
-	test_string_key();
-
-	cout << "\n\nThe program has terminated gracefully\n\n";
-
-	return 0;
-}
-
+#endif /* DICTIONARY_H_ */
